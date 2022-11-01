@@ -11,6 +11,7 @@ go_library(
         "changefeed_processors.go",
         "changefeed_stmt.go",
         "compression.go",
+        "create_scheduled_changefeed.go",
         "doc.go",
         "encoder.go",
         "encoder_avro.go",
