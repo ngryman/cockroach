@@ -4824,7 +4824,7 @@ create_schedule_for_changefeed_stmt:
   /*$8=*/opt_with_options /*$9=*/cron_expr /*$10=*/opt_with_schedule_options
   {
      $$.val = &tree.ScheduledChangefeed{
-        CreateChangefeed:   tree.CreateChangefeed{
+        CreateChangefeed:   &tree.CreateChangefeed{
           Targets:    $6.changefeedTargets(),
           SinkURI:    $7.expr(),
           Options:    $8.kvOptions(),

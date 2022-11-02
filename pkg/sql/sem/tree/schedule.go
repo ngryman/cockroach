@@ -100,7 +100,7 @@ func (node ScheduledBackup) Coverage() DescriptorCoverage {
 
 // ScheduledChangefeed represents scheduled export job.
 type ScheduledChangefeed struct {
-	CreateChangefeed
+	*CreateChangefeed
 	ScheduleLabelSpec LabelSpec
 	Recurrence        Expr
 	ScheduleOptions   KVOptions

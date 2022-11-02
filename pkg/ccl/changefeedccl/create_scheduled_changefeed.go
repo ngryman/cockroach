@@ -1,4 +1,4 @@
-// Copyright 2020 The Cockroach Authors.
+// Copyright 2022 The Cockroach Authors.
 //
 // Licensed as a CockroachDB Enterprise file under the Cockroach Community
 // License (the "License"); you may not use this file except in compliance with
@@ -11,11 +11,34 @@ package changefeedccl
 import (
 	"context"
 
+	"github.com/cockroachdb/cockroach/pkg/ccl/changefeedccl/changefeedvalidators"
 	"github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/colinfo"
+	"github.com/cockroachdb/cockroach/pkg/sql/exprutil"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
+	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/errors"
 )
+
+const scheduleChangefeedOp = "CREATE SCHEDULE FOR CHANGEFEED"
+
+const (
+	optOnExecFailure     = "on_execution_failure"
+	optOnPreviousRunning = "on_previous_running"
+)
+
+var scheduledChangefeedOptionExpectValues = map[string]exprutil.KVStringOptValidate{
+	optOnExecFailure:     exprutil.KVStringOptRequireValue,
+	optOnPreviousRunning: exprutil.KVStringOptRequireValue,
+}
+
+var scheduledChangefeedHeader = colinfo.ResultColumns{
+	{Name: "schedule_id", Typ: types.Int},
+	{Name: "label", Typ: types.String},
+	{Name: "status", Typ: types.String},
+	{Name: "schedule", Typ: types.String},
+	{Name: "changefeed_stmt", Typ: types.String},
+}
 
 func createChangefeedScheduleHook(
 	ctx context.Context, stmt tree.Statement, p sql.PlanHookState,
@@ -46,25 +69,34 @@ func createChangefeedScheduleHook(
 func createChangefeedScheduleTypeCheck(
 	ctx context.Context, stmt tree.Statement, p sql.PlanHookState,
 ) (matched bool, header colinfo.ResultColumns, _ error) {
-	//changefeedStmt := getChangefeedStatement(stmt)
-	//if changefeedStmt == nil {
-	//	return false, nil, nil
-	//}
-	//if err := exprutil.TypeCheck(ctx, `CREATE CHANGEFEED`, p.SemaCtx(),
-	//	exprutil.Strings{changefeedStmt.SinkURI},
-	//	&exprutil.KVOptions{
-	//		KVOptions:  changefeedStmt.Options,
-	//		Validation: changefeedvalidators.CreateOptionValidations,
-	//	},
-	//); err != nil {
-	//	return false, nil, err
-	//}
-	//unspecifiedSink := changefeedStmt.SinkURI == nil
-	//if unspecifiedSink {
-	//	return true, sinklessHeader, nil
-	//}
-	//return true, withSinkHeader, nil
-	return true, withSinkHeader, nil
+	schedule, ok := stmt.(*tree.ScheduledChangefeed)
+	if !ok {
+		return false, nil, nil
+	}
+
+	changefeedStmt := schedule.CreateChangefeed
+	if changefeedStmt == nil {
+		return false, nil, nil
+	}
+	if err := exprutil.TypeCheck(ctx, scheduleChangefeedOp, p.SemaCtx(),
+		exprutil.Strings{
+			changefeedStmt.SinkURI,
+			schedule.Recurrence,
+			schedule.ScheduleLabelSpec.Label,
+		},
+		&exprutil.KVOptions{
+			KVOptions:  changefeedStmt.Options,
+			Validation: changefeedvalidators.CreateOptionValidations,
+		},
+		&exprutil.KVOptions{
+			KVOptions:  schedule.ScheduleOptions,
+			Validation: scheduledChangefeedOptionExpectValues,
+		},
+	); err != nil {
+		return false, nil, err
+	}
+
+	return true, scheduledChangefeedHeader, nil
 }
 
 func init() {
