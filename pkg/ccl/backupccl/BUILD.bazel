@@ -68,6 +68,7 @@ go_library(
         "//pkg/kv/kvserver/protectedts/ptpb",
         "//pkg/roachpb",
         "//pkg/scheduledjobs",
+        "//pkg/scheduledjobs/schedulebase",
         "//pkg/security/username",
         "//pkg/server/telemetry",
         "//pkg/settings",

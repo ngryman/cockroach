@@ -22,6 +22,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobspb"
 	"github.com/cockroachdb/cockroach/pkg/kv"
 	"github.com/cockroachdb/cockroach/pkg/scheduledjobs"
+	"github.com/cockroachdb/cockroach/pkg/scheduledjobs/schedulebase"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/telemetry"
 	"github.com/cockroachdb/cockroach/pkg/settings"
@@ -34,7 +35,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgnotice"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
-	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/cockroach/pkg/util/log/eventpb"
 	"github.com/cockroachdb/errors"
@@ -246,7 +246,7 @@ func doCreateBackupSchedules(
 	ctx context.Context, p sql.PlanHookState, eval *scheduledBackupSpec, resultsCh chan<- tree.Datums,
 ) error {
 	if eval.ScheduleLabelSpec.IfNotExists {
-		exists, err := checkScheduleAlreadyExists(ctx, p, *eval.scheduleLabel)
+		exists, err := schedulebase.CheckScheduleAlreadyExists(ctx, p, *eval.scheduleLabel)
 		if err != nil {
 			return err
 		}
@@ -598,23 +598,6 @@ func emitSchedule(
 		tree.NewDString(tree.AsString(redactedBackupNode)),
 	}
 	return nil
-}
-
-// checkScheduleAlreadyExists returns true if a schedule with the same label already exists,
-// regardless of backup destination.
-func checkScheduleAlreadyExists(
-	ctx context.Context, p sql.PlanHookState, scheduleLabel string,
-) (bool, error) {
-
-	row, err := p.ExecCfg().InternalExecutor.QueryRowEx(ctx, "check-sched",
-		p.Txn(), sessiondata.InternalExecutorOverride{User: username.RootUserName()},
-		fmt.Sprintf("SELECT count(schedule_name) FROM %s WHERE schedule_name = '%s'",
-			scheduledjobs.ProdJobSchedulerEnv.ScheduledJobsTableName(), scheduleLabel))
-
-	if err != nil {
-		return false, err
-	}
-	return int64(tree.MustBeDInt(row[0])) != 0, nil
 }
 
 // dryRunBackup executes backup in dry-run mode: we simply execute backup
